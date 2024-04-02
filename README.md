@@ -1,4 +1,4 @@
-### Roles of each members for the project
+### **Roles for each members of the project**
 
 ### Pallav Regmi: Core Simulation Logic
 - **Designs the agent behaviors and state transitions** (Vulnerable, Sick, Immune, Dead).
