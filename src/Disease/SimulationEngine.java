@@ -1,29 +1,63 @@
 package Disease;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 public class SimulationEngine {
     private List<Agent> agents = new ArrayList<>();
-    private double exposureDistance = 20;
+    private double infectionDistance = 10;
+    private double moveDistance = 5;
+    private double infectionProbability = 0.1;
 
     public SimulationEngine() {
+        initializeAgents(100); // Initialized with 100 agents
+    }
 
-        agents.add(new Agent(Agent.State.SICK, 100, 100));
-        for (int i = 1; i <= 100; i++) {
-            agents.add(new Agent(Agent.State.VULNERABLE, Math.random() * 200, Math.random() * 200));
+    private void initializeAgents(int numberOfAgents) {
+        // Initialize agents with random positions and states for the simulation
+        for (int i = 0; i < numberOfAgents; i++) {
+            double x = Math.random() * 400; // Assuming a 400x400 canvas for simplicity
+            double y = Math.random() * 400;
+            Agent.State state = i < 10 ? Agent.State.SICK : Agent.State.VULNERABLE; // First 10 agents are sick
+            agents.add(new Agent(state, x, y));
         }
     }
 
     public void update() {
-        // Example update - you might include more logic for state changes and interactions
-        agents.forEach(agent -> {
-            if (agent.getState() != Agent.State.DEAD) {
-                agent.moveRandomly(5); // Move agents randomly
+        // Update agents' states and positions here
+        for (Agent agent : agents) {
+            if (agent.getState() == Agent.State.SICK) {
+                // Spread infection
+                for (Agent other : agents) {
+                    if (agent != other && agent.isWithinDistance(other, infectionDistance) && other.getState() == Agent.State.VULNERABLE) {
+                        if (Math.random() < infectionProbability) {
+                            other.setState(Agent.State.SICK);
+                        }
+                    }
+                }
             }
-        });
+            // Move randomly
+            agent.moveRandomly(moveDistance);
+        }
 
-        // Here, implement your logic for checking if agents become sick, recover, etc.
+        // Example logic for recovering or dying, adjust as necessary
+        for (Agent agent : agents) {
+            if (agent.getState() == Agent.State.SICK && Math.random() < 0.05) { // 5% chance to recover or die
+                agent.setState(Math.random() < 0.5 ? Agent.State.IMMUNE : Agent.State.DEAD);
+            }
+        }
+    }
+
+    public Map<Agent.State, Integer> getAgentCounts() {
+        // Count the number of agents in each state
+        Map<Agent.State, Integer> counts = new HashMap<>();
+        for (Agent agent : agents) {
+            counts.putIfAbsent(agent.getState(), 0);
+            counts.put(agent.getState(), counts.get(agent.getState()) + 1);
+        }
+        return counts;
     }
 
     public List<Agent> getAgents() {
