@@ -626,4 +626,3 @@ public class DiseaseGUI extends Application {
 }
 
 
-// Ek choti hera ta
