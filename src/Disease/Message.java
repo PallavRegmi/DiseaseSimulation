@@ -1,9 +1,12 @@
 package Disease;
+<<<<<<< HEAD
 
 /**
  * Simple class for sending messages between agents.
  *
  */
+=======
+>>>>>>> origin/main
 public class Message {
     private HealthState state = HealthState.VULNERABLE;
     private MessageType type;

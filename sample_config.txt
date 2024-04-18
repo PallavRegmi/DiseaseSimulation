@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 random 10
 initialsick 1
 exposuredistance 100
@@ -6,4 +7,14 @@ sickness 7
 recover 0
 dimensions 500 500
 reanimate 0.7
+=======
+random 10
+initialsick 1
+exposuredistance 100
+incubation 3
+sickness 7
+recover 0
+dimensions 500 500
+reanimate 0.7
+>>>>>>> origin/main
 move 100
