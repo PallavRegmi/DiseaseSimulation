@@ -340,10 +340,10 @@ public class DiseaseGUI extends Application {
                             height = Integer.parseInt(dims[2]);
 
                             AM.setDimensions(width, height);
-                            AP.setWrapX(800);
-                            AP.setWrapY(800);
-                            canvas.setHeight(800);
-                            canvas.setWidth(800);
+                            AP.setWrapX(width);
+                            AP.setWrapY(height);
+                            canvas.setHeight(height);
+                            canvas.setWidth(width);
                         }
                         else if(line.contains("exposuredistance")) {
                             String[] distConfig = line.split(" ");
