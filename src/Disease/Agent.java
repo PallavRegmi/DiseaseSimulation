@@ -1,255 +1,315 @@
 package Disease;
 
 import javafx.geometry.Point2D;
+
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Agent class for plague simulation. Encapsulates all agent behavior, including
- * getting sick, wandering, and infecting other agents. Also includes death and
- * optional reanimation as ghosts.
- *
+ * Agent class for a disease simulation. This class simulates the behavior
+ * of an individual within a population during a disease outbreak, including
+ * movement, infection, and potential death and ghost reanimation.
  */
 
 public class Agent implements Runnable {
-    static int agentNumber = 0;
-    private HealthState health;
-    private Point2D position;
-    // all times specified in seconds
-    private final int incubationTime, sicknessTime, reanimateTime,
-            starvationTime;
-    private final int speed, num;
-    private final double recoveryProb, reanimateProb;
-    private ArrayList<Agent> neighbors;
-    private long lastWander, magicSuccessful =0, lastSeek=0;
-    private final Random rand;
-    private final String name;
-    public final LinkedBlockingQueue<Message> messages;
-    private final Object healthlock, positionlock, neighborlock;
-    private final int wrapX, wrapY;
-    private final boolean ghost, wander;
+    private AgentHealthStateEnum agentHealthStateEnum;
+    private long lastVisit, magicSuccessfulTime = 0, lastSeekTime = 0;
+
+    private final int velocity;
+    private final double recoveryP, reanimateP;
+    private ArrayList<Agent> neighborList;
+    private Point2D pointPosition;
+
+    private final Random random;
+    public final LinkedBlockingQueue<MessageUpdates> messageUpdatesLinkedBlockingQueue;
+    private final Object lockHealthObject, lockPositionObject, lockNeighbourObject;
+    private final int wrapXAxis, wrapYAxis;
+
+    // all time periods stored in seconds.
+    private final int incubationTimePeriod, sicknessTimePeriod, reanimateTimePeriod,
+            starvationTimePeriod;
+    private final boolean human, visit;
+    static int agentNum = 0;
+
 
     /**
-     * @param pos initial position of the agent
-     * @param param collection of agent parameters, including incubation period,
-     *              sickness length, probability of recovery, ghost parameters,
-     *              etc.
+     * Constructs an Agent with a starting position and various disease parameters.
+     * @param point2D         The starting location of the agent in the simulation area.
+     * @param agentParameters A set of parameters defining agent behavior, such as disease incubation and infectious periods, probabilities of recovery and ghost states, etc.
      */
-    public Agent(Point2D pos, AgentParameters param) {
-        health = HealthState.VULNERABLE;
-        position = pos;
-        incubationTime = param.getIncubationPeriod();
-        sicknessTime = param.getSicknessTime();
-        speed = param.getSpeed();
-        recoveryProb = param.getRecoveryProb();
-        wander = param.getWander();
+    public Agent(Point2D point2D, AgentParameters agentParameters) {
+        agentHealthStateEnum = AgentHealthStateEnum.VULNERABLE;
+        pointPosition = point2D;
+        incubationTimePeriod = agentParameters.getIncTime();
+        sicknessTimePeriod = agentParameters.getSickTime();
+        velocity = agentParameters.getSpeed();
+        recoveryP = agentParameters.getRecoveryProb();
+        visit = agentParameters.getHaunt();
 
-        neighbors = new ArrayList<>();
-        rand = new Random();
-        lastWander = System.currentTimeMillis();
-        messages = new LinkedBlockingQueue();
-        agentNumber += 1;
-        num = agentNumber;
-        name = "Agent " + agentNumber;
+        neighborList = new ArrayList<>();
+        random = new Random();
+        lastVisit = System.currentTimeMillis();
+        messageUpdatesLinkedBlockingQueue = new LinkedBlockingQueue<>();
+        agentNum += 1;
 
-        healthlock = new Object();
-        positionlock = new Object();
-        neighborlock = new Object();
+        lockHealthObject = new Object();
+        lockPositionObject = new Object();
+        lockNeighbourObject = new Object();
 
-        wrapX = param.getWrapX();
-        wrapY = param.getWrapY();
+        wrapXAxis = agentParameters.getX();
+        wrapYAxis = agentParameters.getY();
 
-        ghost = param.ghostEnabled();
-        reanimateProb = param.getReanimateProb();
-        reanimateTime = param.getReanimateTime();
-        starvationTime = param.getStarvationTime();
+        human = agentParameters.ghostEnabled();
+        reanimateP = agentParameters.getReanimateProb();
+        reanimateTimePeriod = agentParameters.getGhostTime();
+        starvationTimePeriod = agentParameters.getGhostLife();
     }
 
-    public Point2D getPosition() {
-        synchronized (positionlock) {
-            return position;
+    public boolean isSteady() {
+        return messageUpdatesLinkedBlockingQueue.isEmpty();
+    }
+
+    public Point2D getPointOfPosition() {
+        synchronized (lockPositionObject) {
+            return pointPosition;
         }
     }
 
-    public HealthState getHealth() {
-        synchronized (healthlock) {
-            return health;
+    private void setHealthStateOfAgent(AgentHealthStateEnum agentHealthStateEnum) {
+        synchronized (lockHealthObject) {
+            this.agentHealthStateEnum = agentHealthStateEnum;
         }
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public int getNumber() {return num;}
-
-    private void setHealth(HealthState health) {
-        synchronized (healthlock) {
-            this.health = health;
+    public AgentHealthStateEnum getHealthStateOfAgent() {
+        synchronized (lockHealthObject) {
+            return agentHealthStateEnum;
         }
     }
 
-    public void setNeighbors(ArrayList<Agent> neighbors) {
-        synchronized (neighborlock) {
-            this.neighbors = neighbors;
+
+    public void setNeighborLists(ArrayList<Agent> neighborList) {
+        synchronized (lockNeighbourObject) {
+            this.neighborList = neighborList;
         }
     }
+
 
     /**
-     * Send a message to this agent requesting that it either transition to
-     * another health state or stop its thread. Certain health states may cause
-     * the agent to create a health state timer  (DelayedHealtstate) on a new
-     * thread.
-     *
-     * @param msg requested action
+     * This method sends a request to all current neighbors of this agent, asking them
+     * to transition to the INCUBATING state.
      */
-    public void sendMessage(Message msg) {
-        try {
-            messages.put(msg);
-        } catch (InterruptedException e) {};
-    }
 
-    /**
-     * Send a message to each of this agent's current neighbors requesting that
-     * they transition to the INCUBATING state.
-     */
-    private void infectNeighbors() {
-        synchronized (neighborlock) {
-            for (Agent a : neighbors) {
-                if (a.getHealth() == HealthState.VULNERABLE) {
-                    a.sendMessage(new Message(Message.MessageType.TRANSITION,
-                            HealthState.INCUBATING));
+    private void affectNeighbour() {
+        synchronized (lockNeighbourObject) {
+            for (Agent a : neighborList) {
+                if (a.getHealthStateOfAgent() == AgentHealthStateEnum.VULNERABLE) {
+                    a.sendMessages(new MessageUpdates(MessageUpdates.MessageType.TRANSITION,
+                            AgentHealthStateEnum.INCUBATING));
                 }
             }
         }
     }
 
+
     /**
-     * Move in a random direction with distance proportional to the amount of
-     * time that has passed since the last time wander was called.
+     * Moves the agent randomly, basing the distance on how long it's been since we last roamed around.
+     * Like a spontaneous stroll that varies in length depending on the time elapsed.
      *
-     * @param now time in ms at which wander is called
-     * @param speed movement speed in pixels per second
+     * @param present the timestamp in milliseconds when this wanderlust hits
+     * @param velocity how fast we're going in pixels per second
      */
-    private void wander(long now, int speed) {
-        double secsSinceCheck = (now - lastWander) / 1000.0;
-        double dir = 2 * Math.PI * rand.nextDouble();
 
-        double x = speed * secsSinceCheck * Math.cos(dir);
-        double y = speed * secsSinceCheck * Math.sin(dir);
+    private void visit(long present, int velocity) {
+        double timeSinceLastVisit = (present - lastVisit) / 1000.0;
+        double directions = 2 * Math.PI * random.nextDouble();
 
-        synchronized (positionlock) {
+        double x = velocity * timeSinceLastVisit * Math.cos(directions);
+        double y = velocity * timeSinceLastVisit * Math.sin(directions);
 
-            x += this.position.getX();
-            y += this.position.getY();
+        synchronized (lockPositionObject) {
 
-            // Wrap positions horizontally and vertically when agents leave
-            // simulation area
-            while (x > wrapX) {
-                x -= wrapX;
+            x += this.pointPosition.getX();
+            y += this.pointPosition.getY();
+
+            // Ensures agents wrap around to the opposite side of the simulation area
+            // both horizontally and vertically when they exit the boundaries.
+
+            while (x > wrapXAxis) {
+                x -= wrapXAxis;
             }
             while (x < 0) {
-                x += wrapX;
+                x += wrapXAxis;
             }
 
-            while (y > wrapY) {
-                y -= wrapY;
+            while (y > wrapYAxis) {
+                y -= wrapYAxis;
             }
             while (y < 0) {
-                y += wrapY;
+                y += wrapYAxis;
             }
 
-            this.position = new Point2D(x, y);
+            this.pointPosition = new Point2D(x, y);
         }
 
-        lastWander = now;
+        lastVisit = present;
+    }
+
+
+    /**
+     * Finds the nearest neighbor to the current agent, skipping any that are in DEAD,
+     * PERMADEAD, or ghost states. This helper function is used primarily for checking
+     * conditions related to isBlackMagic.
+     *
+     * @return the agent closest to the current one
+     */
+
+    private Agent getNearestNeighbor() {
+        AgentHealthStateEnum stateOfAgent;
+        Agent nearestAgt = null;
+        double distancr, nearestDistance = -1;
+
+        synchronized (lockNeighbourObject) {
+            for (Agent agent : neighborList) {
+                stateOfAgent = agent.getHealthStateOfAgent();
+                if (!(stateOfAgent == AgentHealthStateEnum.DEAD || stateOfAgent == AgentHealthStateEnum.PERMADEAD ||
+                        stateOfAgent == AgentHealthStateEnum.GHOST)) {
+                    distancr = pointPosition.distance(agent.getPointOfPosition());
+                    if (nearestAgt == null || distancr < nearestDistance) {
+                        nearestAgt = agent;
+                        nearestDistance = distancr;
+                    }
+                }
+            }
+
+            return nearestAgt;
+        }
     }
 
     /**
-     * Begin the agent's life, which involves repeatedly wandering, checking
-     * and responding to new messages, and infecting neighbors (if the agent is
-     * sick). Also includes potential reanimation as ghost if enabled. The loop
-     * ends when the agent's health state transitions to PERMADEAD.
+     * Directs this agent to approach the nearest living agent, avoiding those in DEAD,
+     * PERMADEAD, or ghost states. If the agent closes within 10 pixels of its target,
+     * it eliminates the target, which transition to a ghost state.
+     *
+     * @param present the current time in milliseconds when isBlackMagic is invoked
      */
-    public void run() {
-        Message msg;
-        int secsSinceAte;
 
-        while (this.getHealth() != HealthState.PERMADEAD) {
-            if (this.getHealth() == HealthState.GHOST) {
-                secsSinceAte = (int) ((System.currentTimeMillis()
-                        - magicSuccessful) / 1000);
-                if (secsSinceAte >= starvationTime) {
-                    setHealth(HealthState.PERMADEAD);
+    private void darkMagic(long present, int velocity, Agent nearestNeighbour) {
+        if (lastSeekTime == 0) {
+            lastSeekTime = present;
+        }
+
+        if (nearestNeighbour == null) {
+            lastSeekTime = present;
+            return;
+        }
+
+        synchronized (lockPositionObject) {
+            Point2D point2DHeading;
+            point2DHeading = nearestNeighbour.getPointOfPosition().subtract(getPointOfPosition());
+            double secsSinceCheck = (present - this.lastSeekTime) / 1000.0;
+            point2DHeading = point2DHeading.normalize().multiply(velocity * secsSinceCheck);
+            pointPosition = pointPosition.add(point2DHeading);
+
+            if (pointPosition.distance(nearestNeighbour.getPointOfPosition()) < 10) {
+                MessageUpdates m = new MessageUpdates(MessageUpdates.MessageType.TRANSITION,
+                        AgentHealthStateEnum.DEAD);
+                nearestNeighbour.sendMessages(m);
+                magicSuccessfulTime = present;
+            }
+        }
+
+        lastSeekTime = present;
+    }
+
+    /**
+     * Starts the agent's life cycle, where it wanders around, stays on top of incoming messages,
+     * and potentially infects neighbors if it's sick. The agent comes back as a ghost. This whole
+     * routine keeps going until the agent hits the PERMADEAD state, at which
+     * point it's really, truly game over.
+     */
+
+    public void run() {
+        MessageUpdates messages;
+        int timeSinceAte;
+
+        while (this.getHealthStateOfAgent() != AgentHealthStateEnum.PERMADEAD) {
+            if (this.getHealthStateOfAgent() == AgentHealthStateEnum.GHOST) {
+                timeSinceAte = (int) ((System.currentTimeMillis()
+                        - magicSuccessfulTime) / 1000);
+                if (timeSinceAte >= starvationTimePeriod) {
+                    setHealthStateOfAgent(AgentHealthStateEnum.PERMADEAD);
                 } else {
-                    blackMagic(System.currentTimeMillis(), (int) (0.25 * speed),
-                            getClosestNeighbor());
+                    darkMagic(System.currentTimeMillis(), (int) (0.25 * velocity),
+                            getNearestNeighbor());
                 }
-            } else if (wander && getHealth() != HealthState.DEAD) {
-                wander(System.currentTimeMillis(), speed);
+            } else if (visit && getHealthStateOfAgent() != AgentHealthStateEnum.DEAD) {
+                visit(System.currentTimeMillis(), velocity);
             }
 
-            if (getHealth() == HealthState.SICK) {
-                infectNeighbors();
+            if (getHealthStateOfAgent() == AgentHealthStateEnum.SICK) {
+                affectNeighbour();
             }
 
             try {
-                msg = messages.poll(100, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {continue;}
-
-            if (msg == null) {
+                messages = messageUpdatesLinkedBlockingQueue.poll(100, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
                 continue;
             }
 
-            switch (msg.getType()) {
+            if (messages == null) {
+                continue;
+            }
+
+            switch (messages.getMessageType()) {
                 case TRANSITION:
-                    switch (msg.getState()) {
+                    switch (messages.getStateOfAgent()) {
                         case INCUBATING:
-                            if (getHealth() == HealthState.VULNERABLE) {
-                                new Thread(new DelayedHealthState(this,
-                                        HealthState.SICK,
-                                        incubationTime * 1000)).start();
-                                setHealth(msg.getState());
+                            if (getHealthStateOfAgent() == AgentHealthStateEnum.VULNERABLE) {
+                                new Thread(new SlowedHealthState(this,
+                                        AgentHealthStateEnum.SICK,
+                                        incubationTimePeriod * 1000)).start();
+                                setHealthStateOfAgent(messages.getStateOfAgent());
                             }
                             break;
                         case SICK:
-                            if (getHealth() == HealthState.VULNERABLE ||
-                                    getHealth() == HealthState.INCUBATING) {
-                                if (rand.nextDouble() < recoveryProb) {
-                                    new Thread(new DelayedHealthState(this,
-                                            HealthState.IMMUNE,
-                                            sicknessTime * 1000)).start();
+                            if (getHealthStateOfAgent() == AgentHealthStateEnum.VULNERABLE ||
+                                    getHealthStateOfAgent() == AgentHealthStateEnum.INCUBATING) {
+                                if (random.nextDouble() < recoveryP) {
+                                    new Thread(new SlowedHealthState(this,
+                                            AgentHealthStateEnum.IMMUNE,
+                                            sicknessTimePeriod * 1000)).start();
                                 } else {
-                                    new Thread(new DelayedHealthState(this,
-                                            HealthState.DEAD,
-                                            sicknessTime * 1000)).start();
+                                    new Thread(new SlowedHealthState(this,
+                                            AgentHealthStateEnum.DEAD,
+                                            sicknessTimePeriod * 1000)).start();
                                 }
-                                setHealth(msg.getState());
+                                setHealthStateOfAgent(messages.getStateOfAgent());
                             }
                             break;
                         case DEAD:
-                            if (ghost) {
-                                setHealth(HealthState.DEAD);
+                            if (human) {
+                                setHealthStateOfAgent(AgentHealthStateEnum.DEAD);
 
-                                if (rand.nextDouble() < reanimateProb) {
-                                    new Thread(new DelayedHealthState(this,
-                                            HealthState.GHOST,
-                                            reanimateTime*1000)).start();
+                                if (random.nextDouble() < reanimateP) {
+                                    new Thread(new SlowedHealthState(this,
+                                            AgentHealthStateEnum.GHOST,
+                                            reanimateTimePeriod * 1000)).start();
                                 } else {
-                                    setHealth(HealthState.PERMADEAD);
+                                    setHealthStateOfAgent(AgentHealthStateEnum.PERMADEAD);
                                 }
                             } else {
-                                setHealth(HealthState.PERMADEAD);
+                                setHealthStateOfAgent(AgentHealthStateEnum.PERMADEAD);
                             }
                             break;
                         case GHOST:
-                            magicSuccessful = System.currentTimeMillis();
-                            setHealth(msg.getState());
+                            magicSuccessfulTime = System.currentTimeMillis();
+                            setHealthStateOfAgent(messages.getStateOfAgent());
                             break;
                         default:
-                            setHealth(msg.getState());
+                            setHealthStateOfAgent(messages.getStateOfAgent());
                             break;
                     }
                     break;
@@ -259,82 +319,25 @@ public class Agent implements Runnable {
         }
     }
 
-    /**
-     * Get the neighbor presently closest to the current agent, ignoring agents
-     * in DEAD, PERMADEAD, or ghost states. Helper function for isBlackMagic.
-     *
-     * @return closest agent
-     */
-    private Agent getClosestNeighbor() {
-        HealthState hs;
-        Agent closestAgt = null;
-        double dist, closestDist = -1;
 
-        synchronized (neighborlock) {
-            for (Agent a : neighbors) {
-                hs = a.getHealth();
-                if (!(hs == HealthState.DEAD || hs == HealthState.PERMADEAD ||
-                        hs == HealthState.GHOST)) {
-                    dist = position.distance(a.getPosition());
-                    if (closestAgt == null || dist < closestDist) {
-                        closestAgt = a;
-                        closestDist = dist;
-                    }
-                }
-            }
-
-            return closestAgt;
-        }
-    }
-
-    /**
-     * Move towards the closest agent not in DEAD, PERMADEAD, or ghost state.
-     * If the agent "catches" the target (i.e. comes within 10 pixels), kill
-     * the target agent, which has a chance of then transition to ghost state.
-     *
-     * @param now time in ms at which isBlackMagic is called
-     * @param speed
-     * @param closestNeighbor
-     */
-    private void blackMagic(long now, int speed, Agent closestNeighbor) {
-        if (lastSeek == 0) {
-            lastSeek = now;
-        }
-
-        if (closestNeighbor == null) {
-            lastSeek = now;
-            return;
-        }
-
-        synchronized (positionlock) {
-            Point2D heading;
-            heading = closestNeighbor.getPosition().subtract(getPosition());
-            double secsSinceCheck = (now - this.lastSeek) / 1000.0;
-            heading = heading.normalize().multiply(speed * secsSinceCheck);
-            position = position.add(heading);
-
-            if (position.distance(closestNeighbor.getPosition()) < 10) {
-                Message m = new Message(Message.MessageType.TRANSITION,
-                        HealthState.DEAD);
-                closestNeighbor.sendMessage(m);
-                magicSuccessful = now;
-            }
-        }
-
-        lastSeek = now;
-    }
-
-    public boolean isIdle() {
-        return messages.isEmpty();
-    }
-
-    /**
-     * Convenience method for running agent without explicitly wrapping it in
-     * a new Thread object. Idiom borrowed from Brooke Chenoweth Creel
-     */
     public void start() {
-        // Idiom borrowed from Brooke
         new Thread(this).start();
     }
 
+
+    /**
+     * Sends a directive to this agent, asking it to either switch health states or halt its thread.
+     * Depending on the health state it transitions to, the agent also kicks off a
+     * DelayedHealthState timer on a separate thread to manage the timing of state changes.
+     *
+     * @param messageUpdates the action being requested of the agent
+     */
+
+    public void sendMessages(MessageUpdates messageUpdates) {
+        try {
+            messageUpdatesLinkedBlockingQueue.put(messageUpdates);
+        } catch (Exception e) {
+        }
+
+    }
 }

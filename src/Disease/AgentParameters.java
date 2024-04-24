@@ -1,95 +1,150 @@
 package Disease;
 
 /**
- * Encapsulates all parameters related to individual agents. All parameters
- * related to the collection of agents as a whole are located in the
- * AgentLayout class.
- **/
+ * Consolidates all the parameters specific to individual agents.
+ * */
+
 public class AgentParameters {
-    // all times in seconds
-    private int incubationPeriod, sicknessTime, reanimateTime, starvationTime;
-    private int infectDistance;
-    private double recoveryProbability, reanimateProbability;
-    private int wrapX, wrapY;
-    private int initialSick, initialImmune;
+    private int vulnDist;
+    private int sick, immune;
+    private double HealthyChance, GhostChance;
     private int speed;
-    private boolean wander, zombies;
+    private int x, y;
+    private boolean haunt, ghosts;
+    private int incTime, sickTime, ghostTime, ghostLife;
+
 
     /**
-     * Set default values for all parameters, according to project
-     * specifications.
-     */
+     * Initializes all parameters to their default values.
+     **/
+
     public AgentParameters() {
-        incubationPeriod = 5;
-        sicknessTime = 10;
-        recoveryProbability = 0.95;
+        incTime = 5;
+        sickTime = 10;
+        HealthyChance = 0.95;
         speed = 100;
-        infectDistance = 20;
-        wrapX = 500;
-        wrapY = 500;
-        wander = false;
+        vulnDist = 20;
+        x = 500;
+        y = 500;
+        haunt = false;
 
         // Zombie parameters
-        zombies = false;
-        reanimateTime = 10;
-        reanimateProbability = 0;
-        starvationTime  = 10;
+        ghosts = false;
+        ghostTime = 10;
+        GhostChance = 0;
+        ghostLife = 10;
     }
 
-    public void setIncubationPeriod(int t) {incubationPeriod = t;}
+    public void setIncTime(int t) {
+        incTime = t;
+    }
 
-    public void setSicknessTime(int t) {sicknessTime = t;}
+    public void setSickTime(int t) {
+        sickTime = t;
+    }
 
-    public void setRecoveryProbability(double p) {recoveryProbability = p;}
+    public void setHealthyChance(double p) {
+        HealthyChance = p;
+    }
 
-    public void setWrapX(int x) {wrapX = x;}
+    public void setX(int x) {
+        this.x = x;
+    }
 
-    public void setWrapY(int y) {wrapY = y;}
+    public void setY(int y) {
+        this.y = y;
+    }
 
-    public void setInitialSick(int n) {initialSick = n;}
+    public void setSick(int n) {
+        sick = n;
+    }
 
-    public void setInitialImmune(int n) {initialImmune = n;}
+    public void setImmune(int n) {
+        immune = n;
+    }
 
-    public void setInfectDistance(int dist) {infectDistance = dist;}
+    public void setVulnDist(int dist) {
+        vulnDist = dist;
+    }
 
-    public void setSpeed(int speed) {this.speed = speed;}
+    public void setSpeed(int speed) {
+        this.speed = speed;
+    }
 
-    public void setWanderEnabled(boolean wander) {this.wander = wander;}
+    public void setWanderEnabled(boolean wander) {
+        this.haunt = wander;
+    }
 
-    public void becomeGhost(boolean zombies) {this.zombies = zombies;}
+    public void becomeGhost(boolean zombies) {
+        this.ghosts = zombies;
+    }
 
-    public void setReanimateProb(double p) {reanimateProbability = p;}
+    public void setReanimateProb(double p) {
+        GhostChance = p;
+    }
 
-    public void setReanimateTime(int t) {reanimateTime = t;}
+    public void setGhostTime(int t) {
+        ghostTime = t;
+    }
 
-    public void setStarvationTime(int t) {starvationTime = t;}
+    public void setGhostLife(int t) {
+        ghostLife = t;
+    }
 
-    public int getIncubationPeriod() {return incubationPeriod;}
+    public int getIncTime() {
+        return incTime;
+    }
 
-    public int getInitialSick() {return initialSick;}
+    public int getSick() {
+        return sick;
+    }
 
-    public int getInitialImmune() {return initialImmune;}
+    public int getImmune() {
+        return immune;
+    }
 
-    public int getSicknessTime() {return sicknessTime;}
+    public int getSickTime() {
+        return sickTime;
+    }
 
-    public double getRecoveryProb() {return recoveryProbability;}
+    public double getRecoveryProb() {
+        return HealthyChance;
+    }
 
-    public int getInfectDistance() {return infectDistance;}
+    public int getVulnDist() {
+        return vulnDist;
+    }
 
-    public int getSpeed() {return speed;}
+    public int getSpeed() {
+        return speed;
+    }
 
-    public int getWrapX() {return wrapX;}
+    public int getX() {
+        return x;
+    }
 
-    public int getWrapY() {return wrapY;}
+    public int getY() {
+        return y;
+    }
 
-    public boolean getWander() {return wander;}
+    public boolean getHaunt() {
+        return haunt;
+    }
 
-    public boolean ghostEnabled() {return zombies;}
+    public boolean ghostEnabled() {
+        return ghosts;
+    }
 
-    public double getReanimateProb() {return reanimateProbability;}
+    public double getReanimateProb() {
+        return GhostChance;
+    }
 
-    public int getReanimateTime() {return reanimateTime;}
+    public int getGhostTime() {
+        return ghostTime;
+    }
 
-    public int getStarvationTime() {return starvationTime;}
+    public int getGhostLife() {
+        return ghostLife;
+    }
 
 }

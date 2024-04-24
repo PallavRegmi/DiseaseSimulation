@@ -1,10 +1,10 @@
 package Disease;
 
 /**
- * Possible layout types.
+ *  layout types.
  *
  */
-public enum LayoutType {
+public enum LayoutTypeEnum {
     GRID,
     RANDOM,
     RANDOMGRID;
