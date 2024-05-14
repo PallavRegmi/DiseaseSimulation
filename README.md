@@ -59,11 +59,6 @@ The interface uses a `BorderPane` layout, organizing content into regions for di
 
 This architecture provides a comprehensive tool for visualizing disease dynamics, offering interactive controls and detailed graphical representations.
 
-## Known Issues
-- ** After you submit the configuration file, and run the program, the agents might not move(in very rare case), for the first couple of times. Solution: You can click the Start button until you see the agent move and the game will run smoothly.
--** We could not process one of the requirements of the project(Graph).
-
-
 
 
 ## **Roles for each members of the project**
