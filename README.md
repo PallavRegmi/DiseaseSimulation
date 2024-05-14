@@ -28,7 +28,7 @@ Users can customize the simulation via the GUI or a configuration file.
 **Ghost Time: Time after which a ghost will perish if it doesn't interact with other agents.
 
 
-##Running the Program
+## Running the Program
 Run the DiseaseMainGUI which is the main class amongst the 9 classes
 Put in the name of the test file (sample_config.txt, test1.txt,test2.txt, test3.txt) in the Configuration File tab which is on the top left of the GUI display.
 Click the submit button.
